@@ -181,6 +181,11 @@
         </button>
         <div class="collapse navbar-collapse justify-content-end d-none d-lg-flex">
           <span class="text-light me-3" id="topbarUser">User Name (Role)</span>
+          
+          <button class="btn btn-info btn-sm me-2 text-white fw-bold" onclick="app.forceRefresh()" title="Refresh Aplikasi">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+          </button>
+
           <button class="btn btn-outline-light btn-sm" onclick="app.logout()">Logout</button>
         </div>
       </div>
@@ -206,7 +211,12 @@
             <hr>
             <div class="mt-auto">
               <span class="d-block mb-2 text-muted" id="mobileUser">User Name</span>
-              <button class="btn btn-danger w-100 btn-sm" onclick="app.logout()">Logout</button>
+              
+              <button class="btn btn-info w-100 btn-sm mb-2 text-white fw-bold shadow-sm" onclick="app.forceRefresh()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh Aplikasi
+              </button>
+
+              <button class="btn btn-danger w-100 btn-sm shadow-sm" onclick="app.logout()">Logout</button>
             </div>
           </div>
         </div>
@@ -535,10 +545,40 @@
 
     const app = {
       logout: () => { localStorage.removeItem('ptrl_token'); location.reload(); },
+      
       hasPerm: (p) => {
         if (!appState.user || !appState.user.permissions) return false;
         const perms = appState.user.permissions;
         return perms.includes('all') || perms.includes(p) || perms.includes(p.split('.')[0] + '.*');
+      },
+      
+      // --- FUNGSI SUPER REFRESH (ANTI-CACHE IOS) ---
+      forceRefresh: async () => {
+        UI.toast('Menyegarkan aplikasi...', 'info');
+        
+        try {
+          // 1. Matikan Service Worker yang nyangkut
+          if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (let reg of regs) {
+              await reg.unregister();
+            }
+          }
+          // 2. Kosongkan Cache Storage PWA
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            for (let key of keys) {
+              await caches.delete(key);
+            }
+          }
+        } catch (e) { console.log(e); }
+
+        // 3. Reload halaman dengan trik "Cache-Busting" timestamp
+        // Ini memaksa iOS menganggap ini adalah URL baru sehingga wajib download dari server Vercel
+        setTimeout(() => {
+          const cleanUrl = window.location.href.split('?')[0];
+          window.location.href = cleanUrl + '?v=' + new Date().getTime();
+        }, 500);
       }
     };
 
@@ -1546,6 +1586,7 @@ app.downloadMatrixReport = async () => {
 </body>
 
 </html>
+
 
 
 

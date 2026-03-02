@@ -297,6 +297,11 @@
                       <i class="bi bi-camera-video-fill me-2"></i> Buka Kamera & Scan
                     </button>
 
+                    <button id="btnNfcScan" class="btn btn-dark btn-lg w-100 fw-bold shadow-sm mb-3"
+                      onclick="app.startNfcScan()">
+                      <i class="bi bi-broadcast me-2"></i> Tap Tag NFC
+                    </button>
+
                     <button id="btnStopScan" class="btn btn-danger btn-lg w-100 fw-bold shadow-sm mb-3 d-none"
                       onclick="app.stopLiveScanner()">
                       <i class="bi bi-stop-circle-fill me-2"></i> Tutup Kamera
@@ -814,6 +819,9 @@
             bodyHTML += `<td style="white-space:nowrap;">
               <button class="btn btn-sm btn-outline-primary me-1" onclick="app.editCheckpoint(${index})" title="Edit"><i class="bi bi-pencil"></i></button>
               <button class="btn btn-sm btn-outline-dark me-1" onclick="app.printQR('${row.barcodevalue || row.BarcodeValue}', '${row.name || row.Name}')" title="Print QR"><i class="bi bi-printer"></i></button>
+              
+              <button class="btn btn-sm btn-outline-info me-1" onclick="app.writeNFC('${row.barcodevalue || row.BarcodeValue}')" title="Tanamkan ke Tag NFC"><i class="bi bi-broadcast"></i></button>
+              
               <button class="btn btn-sm btn-outline-danger" onclick="app.deleteData('checkpoints', '${row.checkpointid || row.CheckpointId}')" title="Hapus Permanen"><i class="bi bi-trash"></i></button>
             </td>`;
           } else if (tableName === 'PatrolLogs' && app.hasPerm('all')) {
@@ -1409,10 +1417,80 @@ app.downloadMatrixReport = async () => {
       `;
       app.filtersRendered = true;
     };
+
+    // --- FITUR WEB NFC API ---
+
+    // 1. Fungsi untuk Guard Membaca NFC
+    app.startNfcScan = async () => {
+      // Cek dukungan HP
+      if (!('NDEFReader' in window)) {
+        return UI.alert('Tidak Didukung', 'Browser/HP Anda tidak mendukung fitur Web NFC. Mohon gunakan Google Chrome di HP Android.');
+      }
+      // Cek GPS (syarat wajib sebelum scan)
+      if (!appState.gps.lat) return UI.alert('GPS Belum Siap', 'Mohon tunggu status GPS menjadi hijau.');
+
+      try {
+        const ndef = new NDEFReader();
+        await ndef.scan();
+        
+        // Ubah tampilan UI agar user tahu mesin NFC sedang menyala
+        UI.toast('Sensor NFC Aktif! Silakan tempelkan HP ke Tag...', 'info');
+        document.getElementById('btnNfcScan').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Menunggu Tag NFC...';
+        document.getElementById('btnNfcScan').classList.add('btn-warning');
+
+        ndef.addEventListener("readingerror", () => {
+          UI.toast('Gagal membaca NFC, coba tempelkan lebih pas', 'warning');
+        });
+
+        // Jika berhasil terbaca
+        ndef.addEventListener("reading", ({ message }) => {
+          const decoder = new TextDecoder();
+          for (const record of message.records) {
+            if (record.recordType === "text") {
+              const textData = decoder.decode(record.data);
+              
+              // Kembalikan tombol ke semula
+              document.getElementById('btnNfcScan').innerHTML = '<i class="bi bi-broadcast me-2"></i> Tap Tag NFC';
+              document.getElementById('btnNfcScan').classList.remove('btn-warning');
+              
+              UI.toast('NFC Terbaca! Memproses...', 'success');
+              
+              // Lempar data ke fungsi pemroses scan yang sama dengan QR Code!
+              processScan(textData);
+              return; 
+            }
+          }
+          UI.alert('NFC Kosong', 'Tag NFC ini belum diisi data Checkpoint.');
+        });
+      } catch (error) {
+        UI.alert('Sensor NFC Error', error.message);
+        document.getElementById('btnNfcScan').innerHTML = '<i class="bi bi-broadcast me-2"></i> Tap Tag NFC';
+      }
+    };
+
+    // 2. Fungsi untuk Admin Menulis ke NFC Kosong
+    app.writeNFC = async (barcodeText) => {
+      if (!('NDEFReader' in window)) {
+        return UI.alert('Tidak Didukung', 'Gunakan Google Chrome di HP Android untuk menulis Tag NFC.');
+      }
+      try {
+        const ndef = new NDEFReader();
+        // Beri tahu OS untuk bersiap menulis
+        UI.toast('Segera tempelkan Tag NFC kosong ke HP Anda...', 'info');
+        
+        // Perintah write() akan menunggu sampai tag ditempelkan
+        await ndef.write(barcodeText);
+        
+        Swal.fire('Berhasil!', `Data Checkpoint (${barcodeText}) berhasil ditanamkan ke dalam Tag NFC. Tag ini sudah siap dipasang di dinding!`, 'success');
+      } catch (error) {
+        UI.alert('Gagal Menulis NFC', error.message);
+      }
+    };
   </script>
 </body>
 
 </html>
+
 
 
 

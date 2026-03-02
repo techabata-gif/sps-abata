@@ -1482,23 +1482,45 @@ app.downloadMatrixReport = async () => {
       }
 
       // 3. Suntikkan HTML (Kotak Tanggal Kalender, Lokasi, dan Petugas)
+      // 3. Suntikkan HTML (Grid disesuaikan agar rapi + Tombol Reset)
       document.getElementById('filterLogsBody').innerHTML = `
-        <div class="col-md-4 mb-2">
+        <div class="col-md-3 mb-2">
           <label class="small text-muted fw-bold">Tanggal</label>
           <input type="date" id="fLogDate" class="form-control form-control-sm" value="${localDate}" onchange="loadDataTable('PatrolLogs')">
         </div>
-        <div class="col-md-4 mb-2">
+        <div class="col-md-3 mb-2">
           <label class="small text-muted fw-bold">Lokasi Area</label>
           <select id="fLogLoc" class="form-select form-select-sm" onchange="loadDataTable('PatrolLogs')">
             ${cpOptions}
           </select>
         </div>
         ${userHTML}
-        <div class="col-md-1 mb-2 d-flex">
-           <button class="btn btn-sm btn-primary w-100" onclick="loadDataTable('PatrolLogs')" title="Refresh Data"><i class="bi bi-arrow-clockwise"></i></button>
+        
+        <div class="col-md-3 mb-2 d-flex gap-2 align-items-end">
+           <button class="btn btn-sm btn-outline-secondary w-50 shadow-sm" onclick="app.resetLogFilters()" title="Tampilkan Semua (Reset)">
+             <i class="bi bi-x-circle"></i> Reset
+           </button>
+           <button class="btn btn-sm btn-primary w-50 shadow-sm" onclick="loadDataTable('PatrolLogs')" title="Terapkan Filter">
+             <i class="bi bi-search"></i> Cari
+           </button>
         </div>
       `;
       app.filtersRendered = true;
+    };
+
+    // --- FUNGSI RESET FILTER PATROL LOGS ---
+    app.resetLogFilters = () => {
+      // 1. Kosongkan semua kotak input
+      document.getElementById('fLogDate').value = ''; 
+      document.getElementById('fLogLoc').value = '';  
+      
+      // Khusus untuk Admin (karena Guard tidak punya dropdown ini)
+      if (document.getElementById('fLogUser')) {
+        document.getElementById('fLogUser').value = ''; 
+      }
+      
+      // 2. Muat ulang tabel (karena value kosong, API akan memunculkan semua data)
+      loadDataTable('PatrolLogs');
     };
 
     // --- FITUR WEB NFC API ---
@@ -1617,6 +1639,7 @@ app.downloadMatrixReport = async () => {
 </body>
 
 </html>
+
 
 
 

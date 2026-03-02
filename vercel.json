@@ -3,35 +3,16 @@
   "builds": [
     {
       "src": "server.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/sw.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Pragma", "value": "no-cache" },
-        { "key": "Expires", "value": "0" }
-      ]
-    },
-    {
-      "source": "/index.html",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Pragma", "value": "no-cache" },
-        { "key": "Expires", "value": "0" }
-      ]
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": "public/**"
+      }
     }
   ],
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/server.js"
-    },
-    {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "/server.js"
     }
   ]
 }

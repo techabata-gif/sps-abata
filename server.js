@@ -401,11 +401,35 @@ app.delete("/api/patrollogs/:id", authenticateToken, async (req, res) => {
 });
 
 // --- STATIC SERVING ---
-app.use(express.static(path.join(__dirname, "public")));
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get(/^\/(?!api).*/, (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+// --- STATIC SERVING DENGAN ANTI-CACHE UNTUK PWA ---
+
+// 1. Fungsi untuk memaksa file HTML tidak di-cache oleh browser/Vercel
+const setCustomCacheControl = (res, path) => {
+  if (express.static.mime.lookup(path) === 'text/html') {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+};
+
+// 2. Terapkan pada folder public
+app.use(express.static(path.join(__dirname, "public"), {
+  setHeaders: setCustomCacheControl
+}));
+
+// 3. Terapkan pada rute utama dan rute lainnya
+const sendHtmlNoCache = (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+};
+
+app.get("/", sendHtmlNoCache);
+app.get(/^\/(?!api).*/, sendHtmlNoCache);
 
 module.exports = app;
+
 
 
 

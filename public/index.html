@@ -1189,10 +1189,40 @@ app.downloadMatrixReport = async () => {
 
       // Gunakan urutan asli, JANGAN di-sort secara alfabetis
       const jamSlots = jamSlotsSequence; 
+      // Dapatkan tanggal hari ini untuk membedakan "Hari Berlalu" vs "Masa Depan"
+      const now = new Date();
+      const curYear = now.getFullYear();
+      const curMonth = now.getMonth() + 1;
+      const curDay = now.getDate();
+
+      const reqYear = parseInt(year);
+      const reqMonth = parseInt(month);
+
+      // Gunakan urutan asli, JANGAN di-sort secara alfabetis
+      const jamSlots = jamSlotsSequence; 
       jamSlots.forEach(jam => {
         const row = [{ text: jam, style: 'jamCell' }];
         for (let i = 1; i <= 31; i++) {
-          row.push({ text: groupedData[lokasi][jam][i] || "", style: 'dataCell' });
+          const cellData = groupedData[lokasi][jam][i] || "";
+          
+          // Logika Cerdas: Cek apakah tanggal sel ini sudah terlewat / adalah hari ini
+          let isPastOrToday = false;
+          if (reqYear < curYear) isPastOrToday = true;
+          else if (reqYear === curYear && reqMonth < curMonth) isPastOrToday = true;
+          else if (reqYear === curYear && reqMonth === curMonth && i <= curDay) isPastOrToday = true;
+
+          if (cellData === "") {
+            if (isPastOrToday) {
+              // Jika kosong di masa lalu/hari ini = TERLEWAT (Warna background merah muda + tulisan X merah)
+              row.push({ text: "X", style: 'missedCell', fillColor: '#ffe6e6' }); 
+            } else {
+              // Jika kosong tapi di masa depan = BIARKAN BERSIH
+              row.push({ text: "", style: 'dataCell' });
+            }
+          } else {
+            // Jika ada data / Guard absen (Biarkan normal putih)
+            row.push({ text: cellData, style: 'dataCell' });
+          }
         }
         tableBody.push(row);
       });
@@ -1228,7 +1258,9 @@ app.downloadMatrixReport = async () => {
         lokasiTitle: { fontSize: 8, bold: true, margin: [0, 3, 0, 1] },
         tableHeader: { fontSize: 6, bold: true, fillColor: '#eeeeee', alignment: 'center' },
         jamCell: { fontSize: 6, bold: true, alignment: 'center' },
-        dataCell: { fontSize: 5, alignment: 'center' }
+        dataCell: { fontSize: 5, alignment: 'center' },
+        // --- STYLE BARU UNTUK BOLOS/TERLEWAT ---
+        missedCell: { fontSize: 6, bold: true, color: '#cc0000', alignment: 'center' }
       }
     };
 
@@ -1639,6 +1671,7 @@ app.downloadMatrixReport = async () => {
 </body>
 
 </html>
+
 
 
 

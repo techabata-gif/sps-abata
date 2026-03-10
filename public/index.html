@@ -1234,6 +1234,25 @@ app.downloadMatrixReport = async () => {
         tableBody.push(row);
       });
 
+      const docDefinition = {
+      pageOrientation: 'landscape',
+      pageSize: 'A4',
+      pageMargins,
+      defaultStyle: { fontSize: 6 },
+      content,
+      styles: {
+        mainHeader: { fontSize: 10, bold: true, alignment: 'center' },
+        subHeader: { fontSize: 7, alignment: 'center', margin: [0, 0, 0, 6] },
+        lokasiTitle: { fontSize: 8, bold: true, margin: [0, 3, 0, 1] },
+        tableHeader: { fontSize: 6, bold: true, fillColor: '#eeeeee', alignment: 'center' },
+        jamCell: { fontSize: 6, bold: true, alignment: 'center' },
+        dataCell: { fontSize: 5, alignment: 'center' },
+        // --- STYLE BARU UNTUK BOLOS & PARSIAL ---
+        missedCell: { fontSize: 6, bold: true, color: '#cc0000', alignment: 'center' },
+        partialCell: { fontSize: 5, bold: true, color: '#856404', alignment: 'center' } // Teks agak kecoklatan untuk sel kuning
+      }
+    };
+
       content.push({
         table: { headerRows: 1, widths, body: tableBody },
         layout: {
@@ -1678,6 +1697,7 @@ app.downloadMatrixReport = async () => {
 </body>
 
 </html>
+
 
 
 

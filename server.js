@@ -112,6 +112,9 @@ app.post("/api/scan", authenticateToken, async (req, res) => {
 // ==========================================
 // REPORTS & MATRIX (12 SLOTS / 24H) - FIXED TIMEZONE
 // ==========================================
+// ==========================================
+// REPORTS & MATRIX (12 SLOTS / 24H) - FIXED TIMEZONE
+// ==========================================
 app.get("/api/reports/matrix", authenticateToken, async (req, res) => {
   const { month, year } = req.query;
   try {
@@ -127,7 +130,6 @@ app.get("/api/reports/matrix", authenticateToken, async (req, res) => {
     if (interval < 1) interval = 1; 
     const totalSteps = Math.floor(24 / interval);
 
-    // Kueri baru yang menangkap jumlah scan_inhouse dan scan_outsource (menggunakan huruf kecil u.guardtype untuk keamanan PG)
     const query = `
       WITH RECURSIVE hours AS (
           SELECT $3::int AS start_hour, 1 AS step
@@ -150,7 +152,8 @@ app.get("/api/reports/matrix", authenticateToken, async (req, res) => {
         COUNT(CASE WHEN u.guardtype = 'Outsource' THEN 1 END) as scan_outsource
       FROM days d 
       CROSS JOIN hours h 
-      CROSS JOIN Checkpoints c
+      -- [KODE BARU]: Filter ketat, HANYA muat Checkpoint yang statusnya Aktif
+      CROSS JOIN (SELECT * FROM Checkpoints WHERE Active = TRUE) c
       LEFT JOIN PatrolLogs l ON 
         l.CheckpointId = c.CheckpointId AND 
         (l.Timestamp + INTERVAL '7 hours')::date = d.date AND
@@ -164,6 +167,9 @@ app.get("/api/reports/matrix", authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ==========================================
+// REKAP LIST (MONTHLY REPORT)
+// ==========================================
 // ==========================================
 // REKAP LIST (MONTHLY REPORT)
 // ==========================================
@@ -181,6 +187,7 @@ app.get("/api/reports/monthly", authenticateToken, async (req, res) => {
       JOIN Checkpoints c ON l.CheckpointId = c.CheckpointId
       WHERE EXTRACT(MONTH FROM l.Timestamp + INTERVAL '7 hours') = $1
         AND EXTRACT(YEAR FROM l.Timestamp + INTERVAL '7 hours') = $2
+        AND c.Active = TRUE -- [KODE BARU]: Sembunyikan dari rekap list jika Inaktif
       ORDER BY l.Timestamp ASC
     `;
     const result = await pool.query(query, [parseInt(month), parseInt(year)]);
@@ -397,3 +404,4 @@ app.get(/^\/(?!api).*/, (req, res) => {
 });
 
 module.exports = app;
+

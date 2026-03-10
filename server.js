@@ -122,15 +122,11 @@ app.post("/api/scan", authenticateToken, async (req, res) => {
 
 
 // ==========================================
-// REPORTS & MATRIX (12 SLOTS / 24H)
-// ==========================================
-// ==========================================
 // REPORTS & MATRIX (12 SLOTS / 24H) - FIXED TIMEZONE
 // ==========================================
 app.get("/api/reports/matrix", authenticateToken, async (req, res) => {
   const { month, year } = req.query;
   try {
-    // 1. Ambil pengaturan jadwal yang sedang aktif
     const schedRes = await pool.query("SELECT StartHour, IntervalHours FROM Schedules WHERE IsActive = TRUE LIMIT 1");
     let startHour = 7;
     let interval = 2;
@@ -140,12 +136,9 @@ app.get("/api/reports/matrix", authenticateToken, async (req, res) => {
       interval = parseInt(schedRes.rows[0].intervalhours);
     }
     
-    // Cegah error jika interval diinput 0
     if (interval < 1) interval = 1; 
     const totalSteps = Math.floor(24 / interval);
 
-    // 2. Query untuk membuat Matrix berdasarkan konfigurasi dinamis di atas
-    // 2. Query untuk membuat Matrix berdasarkan konfigurasi dinamis di atas
     const query = `
       WITH RECURSIVE hours AS (
           SELECT $3::int AS start_hour, 1 AS step
@@ -163,8 +156,9 @@ app.get("/api/reports/matrix", authenticateToken, async (req, res) => {
         EXTRACT(DAY FROM d.date) as tgl, 
         LPAD(h.start_hour::text, 2, '0') || ':00' AS jam_slot, 
         c.Name AS lokasi, 
-        -- [KODE BARU]: Gabungkan semua inisial berbeda yang scan di jam ini, pisahkan dengan garis miring
-        STRING_AGG(DISTINCT UPPER(LEFT(l.Username, 3)), ' / ') AS inisial
+        STRING_AGG(DISTINCT UPPER(LEFT(l.Username, 3)), ' / ') AS inisial,
+        COUNT(CASE WHEN u.GuardType = 'Inhouse' THEN 1 END) as scan_inhouse,
+        COUNT(CASE WHEN u.GuardType = 'Outsource' THEN 1 END) as scan_outsource
       FROM days d 
       CROSS JOIN hours h 
       CROSS JOIN Checkpoints c
@@ -172,7 +166,7 @@ app.get("/api/reports/matrix", authenticateToken, async (req, res) => {
         l.CheckpointId = c.CheckpointId AND 
         (l.Timestamp + INTERVAL '7 hours')::date = d.date AND
         EXTRACT(HOUR FROM (l.Timestamp + INTERVAL '7 hours')) = h.start_hour
-      -- [KODE BARU]: Grouping wajib ditambahkan karena kita menggunakan fungsi agregasi STRING_AGG
+      LEFT JOIN Users u ON l.UserId = u.UserId
       GROUP BY d.date, h.start_hour, c.Name, h.step
       ORDER BY h.step ASC, lokasi ASC, tgl ASC;
     `;
@@ -184,30 +178,33 @@ app.get("/api/reports/matrix", authenticateToken, async (req, res) => {
 // ==========================================
 // DATA MANAGEMENT (USERS & CHECKPOINTS)
 // ==========================================
+// ==========================================
+// DATA MANAGEMENT (USERS & CHECKPOINTS)
+// ==========================================
 app.get("/api/users", authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query("SELECT UserId as \"UserId\", Name as \"Name\", Username as \"Username\", Role as \"Role\", IsActive as \"IsActive\" FROM Users ORDER BY Name ASC");
+    const result = await pool.query("SELECT UserId as \"UserId\", Name as \"Name\", Username as \"Username\", Role as \"Role\", GuardType as \"Tipe\", IsActive as \"IsActive\" FROM Users ORDER BY Name ASC");
     res.json({ ok: true, data: result.rows });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
 app.post("/api/users", authenticateToken, async (req, res) => {
-  const { Name, Username, Password, Role, IsActive } = req.body;
+  const { Name, Username, Password, Role, IsActive, GuardType } = req.body;
   try {
     const hash = await bcrypt.hash(Password, 10);
-    await pool.query("INSERT INTO Users (Name, Username, PasswordHash, Role, IsActive) VALUES ($1, $2, $3, $4, $5)", [Name, Username, hash, Role, IsActive]);
+    await pool.query("INSERT INTO Users (Name, Username, PasswordHash, Role, IsActive, GuardType) VALUES ($1, $2, $3, $4, $5, $6)", [Name, Username, hash, Role, IsActive, GuardType || 'Inhouse']);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
 app.put("/api/users", authenticateToken, async (req, res) => {
-  const { UserId, Name, Password, Role, IsActive } = req.body;
+  const { UserId, Name, Password, Role, IsActive, GuardType } = req.body;
   try {
     if (Password && Password.trim() !== "") {
       const hash = await bcrypt.hash(Password, 10);
-      await pool.query("UPDATE Users SET Name=$1, PasswordHash=$2, Role=$3, IsActive=$4 WHERE UserId=$5", [Name, hash, Role, IsActive, UserId]);
+      await pool.query("UPDATE Users SET Name=$1, PasswordHash=$2, Role=$3, IsActive=$4, GuardType=$5 WHERE UserId=$6", [Name, hash, Role, IsActive, GuardType || 'Inhouse', UserId]);
     } else {
-      await pool.query("UPDATE Users SET Name=$1, Role=$2, IsActive=$3 WHERE UserId=$4", [Name, Role, IsActive, UserId]);
+      await pool.query("UPDATE Users SET Name=$1, Role=$2, IsActive=$3, GuardType=$4 WHERE UserId=$5", [Name, Role, IsActive, GuardType || 'Inhouse', UserId]);
     }
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
@@ -446,6 +443,7 @@ app.get(/^\/(?!api).*/, (req, res) => {
 });
 
 module.exports = app;
+
 
 
 

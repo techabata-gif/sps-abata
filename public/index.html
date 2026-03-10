@@ -900,17 +900,18 @@ app.openDataModal = () => {
 };
 
     // --- FORM USERS ---
+    // --- FORM USERS ---
     app.editUser = (index) => buildUserForm(appState.currentTableData[index]);
     function buildUserForm(data = null) {
       document.getElementById('dataModalTitle').innerText = data ? 'Edit User' : 'Tambah User';
       const isEdit = !!data;
 
-      // Node.js postgres return keys in lowercase usually, handle both
       const uid = data ? (data.userid || data.UserId) : '';
       const name = data ? (data.name || data.Name) : '';
       const uname = data ? (data.username || data.Username) : '';
       const role = data ? (data.role || data.Role) : '';
       const isActive = data ? (data.isactive || data.IsActive) : true;
+      const guardType = data ? (data.tipe || data.Tipe || data.GuardType) : 'Inhouse'; // Data baru
 
       document.getElementById('dataModalBody').innerHTML = `
         <form id="userForm">
@@ -922,6 +923,10 @@ app.openDataModal = () => {
             <option value="Guard" ${role === 'Guard' ? 'selected' : ''}>Guard</option>
             <option value="Supervisor" ${role === 'Supervisor' ? 'selected' : ''}>Supervisor</option>
             <option value="Admin" ${role === 'Admin' ? 'selected' : ''}>Admin</option>
+          </select></div>
+          <div class="mb-2"><label>Tipe Guard</label><select id="f_gtype" class="form-select">
+            <option value="Inhouse" ${guardType === 'Inhouse' ? 'selected' : ''}>In-House</option>
+            <option value="Outsource" ${guardType === 'Outsource' ? 'selected' : ''}>Outsource</option>
           </select></div>
           <div class="mb-2"><label>Status</label><select id="f_active" class="form-select">
             <option value="true" ${isActive.toString() === 'true' ? 'selected' : ''}>Aktif</option>
@@ -937,6 +942,7 @@ app.openDataModal = () => {
           Username: document.getElementById('f_username').value,
           Password: document.getElementById('f_pass').value,
           Role: document.getElementById('f_role').value,
+          GuardType: document.getElementById('f_gtype').value, // Menangkap Inhouse/Outsource
           IsActive: document.getElementById('f_active').value === 'true'
         };
         UI.showLoader();
@@ -1197,7 +1203,6 @@ app.downloadMatrixReport = async () => {
       const reqMonth = parseInt(month);
 
       // Gunakan urutan asli, JANGAN di-sort secara alfabetis
-      // Gunakan urutan asli, JANGAN di-sort secara alfabetis
       const jamSlots = jamSlotsSequence; 
       jamSlots.forEach(jam => {
         const row = [{ text: jam, style: 'jamCell' }];
@@ -1234,25 +1239,6 @@ app.downloadMatrixReport = async () => {
         tableBody.push(row);
       });
 
-      const docDefinition = {
-      pageOrientation: 'landscape',
-      pageSize: 'A4',
-      pageMargins,
-      defaultStyle: { fontSize: 6 },
-      content,
-      styles: {
-        mainHeader: { fontSize: 10, bold: true, alignment: 'center' },
-        subHeader: { fontSize: 7, alignment: 'center', margin: [0, 0, 0, 6] },
-        lokasiTitle: { fontSize: 8, bold: true, margin: [0, 3, 0, 1] },
-        tableHeader: { fontSize: 6, bold: true, fillColor: '#eeeeee', alignment: 'center' },
-        jamCell: { fontSize: 6, bold: true, alignment: 'center' },
-        dataCell: { fontSize: 5, alignment: 'center' },
-        // --- STYLE BARU UNTUK BOLOS & PARSIAL ---
-        missedCell: { fontSize: 6, bold: true, color: '#cc0000', alignment: 'center' },
-        partialCell: { fontSize: 5, bold: true, color: '#856404', alignment: 'center' } // Teks agak kecoklatan untuk sel kuning
-      }
-    };
-
       content.push({
         table: { headerRows: 1, widths, body: tableBody },
         layout: {
@@ -1285,8 +1271,9 @@ app.downloadMatrixReport = async () => {
         tableHeader: { fontSize: 6, bold: true, fillColor: '#eeeeee', alignment: 'center' },
         jamCell: { fontSize: 6, bold: true, alignment: 'center' },
         dataCell: { fontSize: 5, alignment: 'center' },
-        // --- STYLE BARU UNTUK BOLOS/TERLEWAT ---
-        missedCell: { fontSize: 6, bold: true, color: '#cc0000', alignment: 'center' }
+        // --- STYLE BARU UNTUK BOLOS & PARSIAL ---
+        missedCell: { fontSize: 6, bold: true, color: '#cc0000', alignment: 'center' },
+        partialCell: { fontSize: 5, bold: true, color: '#856404', alignment: 'center' } // Teks agak kecoklatan untuk sel kuning
       }
     };
 
@@ -1697,6 +1684,7 @@ app.downloadMatrixReport = async () => {
 </body>
 
 </html>
+
 
 
 

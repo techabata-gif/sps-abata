@@ -1197,29 +1197,38 @@ app.downloadMatrixReport = async () => {
       const reqMonth = parseInt(month);
 
       // Gunakan urutan asli, JANGAN di-sort secara alfabetis
+      // Gunakan urutan asli, JANGAN di-sort secara alfabetis
       const jamSlots = jamSlotsSequence; 
       jamSlots.forEach(jam => {
         const row = [{ text: jam, style: 'jamCell' }];
         for (let i = 1; i <= 31; i++) {
           const cellData = groupedData[lokasi][jam][i] || "";
           
-          // Logika Cerdas: Cek apakah tanggal sel ini sudah terlewat / adalah hari ini
           let isPastOrToday = false;
           if (reqYear < curYear) isPastOrToday = true;
           else if (reqYear === curYear && reqMonth < curMonth) isPastOrToday = true;
           else if (reqYear === curYear && reqMonth === curMonth && i <= curDay) isPastOrToday = true;
 
+          // LOGIKA WARNA CERDAS UNTUK 2 SEKOTON (IN-HOUSE & OUTSOURCE)
           if (cellData === "") {
+            // 1. KOSONG TOTAL (Warna Merah)
             if (isPastOrToday) {
-              // Jika kosong di masa lalu/hari ini = TERLEWAT (Warna background merah muda + tulisan X merah)
               row.push({ text: "X", style: 'missedCell', fillColor: '#ffe6e6' }); 
             } else {
-              // Jika kosong tapi di masa depan = BIARKAN BERSIH
               row.push({ text: "", style: 'dataCell' });
             }
+          } else if (!cellData.includes('/')) {
+            // 2. HANYA 1 ORANG SCAN (Warna Kuning, karena tidak ada karakter ' / ' di dalam teksnya)
+            if (isPastOrToday) {
+              row.push({ text: cellData, style: 'partialCell', fillColor: '#fff3cd' }); 
+            } else {
+              row.push({ text: cellData, style: 'dataCell' }); 
+            }
           } else {
-            // Jika ada data / Guard absen (Biarkan normal putih)
-            row.push({ text: cellData, style: 'dataCell' });
+            // 3. KOMPLIT (Ada 2 orang atau lebih scan, dipisah ' / ')
+            // Kita ubah ' / ' menjadi baris baru (enter) agar inisial menumpuk rapi ke bawah di kotak sempit
+            const formattedText = cellData.split(' / ').join('\n');
+            row.push({ text: formattedText, style: 'dataCell' }); 
           }
         }
         tableBody.push(row);
@@ -1669,6 +1678,7 @@ app.downloadMatrixReport = async () => {
 </body>
 
 </html>
+
 
 
 

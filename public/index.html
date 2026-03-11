@@ -358,6 +358,15 @@
                       </div>
                       <small class="text-muted">Jeda waktu antar shift</small>
                     </div>
+
+                    <div class="mb-4">
+                      <label class="form-label fw-bold">Pengunci Jadwal Ketat</label>
+                      <select id="setStrictLock" class="form-select">
+                        <option value="true">Aktif (Kunci tombol scan saat di luar jam)</option>
+                        <option value="false">Non-Aktif (Bebas scan kapan saja)</option>
+                      </select>
+                      <small class="text-muted">Jika diaktifkan, Guard tidak bisa mencuri start atau absen di luar jadwal.</small>
+                    </div>
                     
                     <button class="btn btn-primary w-100 fw-bold" onclick="app.saveScheduleSettings()">
                       <i class="bi bi-save me-2"></i> Simpan Pengaturan
@@ -641,11 +650,24 @@
       try {
         const res = await apiCall('schedules', null, 'GET');
         if (!res.ok) return;
+
+        const btnNfc = document.getElementById('btnNfcScan');
+        const btnStart = document.getElementById('btnStartScan');
+        const manualIn = document.getElementById('manualBarcode');
+        const manualBtn = manualIn.nextElementSibling; 
+        const statusDiv = document.getElementById('scheduleStatus');
+
+        // JIKA GEMBOK DINONAKTIFKAN VIA UI (BEBAS SCAN)
+        if (res.data.isstrictlock === false) {
+           btnNfc.disabled = false; btnStart.disabled = false; 
+           manualIn.disabled = false; manualBtn.disabled = false;
+           statusDiv.classList.add('d-none');
+           return; // Hentikan fungsi di sini, tombol bebas terbuka!
+        }
         
         const startHour = parseInt(res.data.starthour);
         const interval = parseInt(res.data.intervalhours) || 1;
 
-        // 1. Hitung semua deretan jam yang diizinkan (Contoh: 7, 9, 11, 13...)
         const validHours = [];
         const totalSteps = Math.floor(24 / interval);
         let currentSlot = startHour;
@@ -654,30 +676,18 @@
           currentSlot += interval;
         }
 
-        // 2. Ambil Jam di HP saat ini
         const currentHour = new Date().getHours();
         
-        // 3. Tangkap semua tombol di layar
-        const btnNfc = document.getElementById('btnNfcScan');
-        const btnStart = document.getElementById('btnStartScan');
-        const manualIn = document.getElementById('manualBarcode');
-        const manualBtn = manualIn.nextElementSibling; // Tombol Submit Manual
-        const statusDiv = document.getElementById('scheduleStatus');
-
-        // 4. Bandingkan!
         if (validHours.includes(currentHour)) {
-          // JIKA COCOK: Buka Kunci Semua Tombol
           btnNfc.disabled = false; btnStart.disabled = false; 
           manualIn.disabled = false; manualBtn.disabled = false;
           statusDiv.classList.add('d-none');
         } else {
-          // JIKA TIDAK COCOK: Kunci Semua Tombol!
           btnNfc.disabled = true; btnStart.disabled = true; 
           manualIn.disabled = true; manualBtn.disabled = true;
           
-          // Cari tahu jam berapa sesi berikutnya buka
           let nextSlot = validHours.find(h => h > currentHour);
-          if (nextSlot === undefined) nextSlot = validHours[0]; // Loncat ke besok pagi
+          if (nextSlot === undefined) nextSlot = validHours[0]; 
           
           statusDiv.innerHTML = `<i class="bi bi-lock-fill"></i> <b>Sesi Patroli Terkunci</b><br><small>Hanya bisa scan di jam yang dijadwalkan. Buka kembali pada <b>${String(nextSlot).padStart(2, '0')}:00 WIB</b>.</small>`;
           statusDiv.classList.remove('d-none');
@@ -1495,9 +1505,10 @@ app.downloadMatrixReport = async () => {
       try {
         const res = await apiCall('schedules', null, 'GET');
         if (res.ok && res.data) {
-          // Isi nilai form dari database
           document.getElementById('setStartHour').value = res.data.starthour;
           document.getElementById('setInterval').value = res.data.intervalhours;
+          // Set saklar dropdown sesuai data
+          document.getElementById('setStrictLock').value = res.data.isstrictlock === false ? 'false' : 'true'; 
         }
       } catch (e) { 
         UI.alert('Gagal memuat jadwal', e.message); 
@@ -1510,11 +1521,14 @@ app.downloadMatrixReport = async () => {
       try {
         const p = {
           StartHour: parseInt(document.getElementById('setStartHour').value),
-          IntervalHours: parseInt(document.getElementById('setInterval').value)
+          IntervalHours: parseInt(document.getElementById('setInterval').value),
+          IsStrictLock: document.getElementById('setStrictLock').value === 'true' // Ambil nilai saklar
         };
         const res = await apiCall('schedules', p, 'PUT');
         if (res.ok) {
-          Swal.fire('Berhasil!', 'Pengaturan jadwal berhasil diperbarui. Laporan Matrix akan otomatis menyesuaikan jadwal baru ini.', 'success');
+          Swal.fire('Berhasil!', 'Pengaturan jadwal dan kunci keamanan berhasil diperbarui.', 'success');
+          // Update layar scanner agar langsung terbuka/terkunci jika status berubah
+          app.checkScheduleEnforcement();
         }
       } catch (e) { 
         UI.alert('Gagal menyimpan', e.message); 
@@ -1765,6 +1779,7 @@ app.downloadMatrixReport = async () => {
 </body>
 
 </html>
+
 
 
 

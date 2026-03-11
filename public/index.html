@@ -636,10 +636,61 @@
       if (offcanvasInst) offcanvasInst.hide();
     }
 
+    // --- FUNGSI PENGUNCI JADWAL KETAT ---
+    app.checkScheduleEnforcement = async () => {
+      try {
+        const res = await apiCall('schedules', null, 'GET');
+        if (!res.ok) return;
+        
+        const startHour = parseInt(res.data.starthour);
+        const interval = parseInt(res.data.intervalhours) || 1;
+
+        // 1. Hitung semua deretan jam yang diizinkan (Contoh: 7, 9, 11, 13...)
+        const validHours = [];
+        const totalSteps = Math.floor(24 / interval);
+        let currentSlot = startHour;
+        for(let i=0; i < totalSteps; i++) {
+          validHours.push(currentSlot % 24);
+          currentSlot += interval;
+        }
+
+        // 2. Ambil Jam di HP saat ini
+        const currentHour = new Date().getHours();
+        
+        // 3. Tangkap semua tombol di layar
+        const btnNfc = document.getElementById('btnNfcScan');
+        const btnStart = document.getElementById('btnStartScan');
+        const manualIn = document.getElementById('manualBarcode');
+        const manualBtn = manualIn.nextElementSibling; // Tombol Submit Manual
+        const statusDiv = document.getElementById('scheduleStatus');
+
+        // 4. Bandingkan!
+        if (validHours.includes(currentHour)) {
+          // JIKA COCOK: Buka Kunci Semua Tombol
+          btnNfc.disabled = false; btnStart.disabled = false; 
+          manualIn.disabled = false; manualBtn.disabled = false;
+          statusDiv.classList.add('d-none');
+        } else {
+          // JIKA TIDAK COCOK: Kunci Semua Tombol!
+          btnNfc.disabled = true; btnStart.disabled = true; 
+          manualIn.disabled = true; manualBtn.disabled = true;
+          
+          // Cari tahu jam berapa sesi berikutnya buka
+          let nextSlot = validHours.find(h => h > currentHour);
+          if (nextSlot === undefined) nextSlot = validHours[0]; // Loncat ke besok pagi
+          
+          statusDiv.innerHTML = `<i class="bi bi-lock-fill"></i> <b>Sesi Patroli Terkunci</b><br><small>Hanya bisa scan di jam yang dijadwalkan. Buka kembali pada <b>${String(nextSlot).padStart(2, '0')}:00 WIB</b>.</small>`;
+          statusDiv.classList.remove('d-none');
+        }
+      } catch (e) { console.error("Gagal mengecek jadwal", e); }
+    };
+
     // --- 5. SCAN PATROL (BULLETPROOF IOS/ANDROID CAMERA) ---
     let gpsWatchId = null;
 
     function initScanner() {
+      app.checkScheduleEnforcement();
+      
       const gpsStatus = document.getElementById('gpsStatus');
       gpsStatus.className = "alert alert-info py-2 mb-4";
       gpsStatus.innerHTML = `<div class="spinner-border spinner-border-sm me-2" role="status"></div> Menunggu Sinyal GPS...`;
@@ -1714,6 +1765,7 @@ app.downloadMatrixReport = async () => {
 </body>
 
 </html>
+
 
 
 

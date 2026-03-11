@@ -1075,13 +1075,20 @@ app.openDataModal = () => {
     app.downloadPDF = async () => {
       const m = document.getElementById('reportMonth').value;
       const y = document.getElementById('reportYear').value;
+
+      // 1. Buka tab baru SEBELUM proses API agar tidak diblokir Safari/Chrome
+      const previewWindow = window.open('', '_blank');
+      if (previewWindow) {
+        previewWindow.document.write('<h3 style="font-family:sans-serif; text-align:center; margin-top:20%; color:#0d6efd;">Sedang menyusun laporan...</h3>');
+      } else {
+        return UI.alert('Pop-up Diblokir', 'Mohon izinkan pop-up (Pop-ups allowed) di browser Anda untuk melihat laporan.');
+      }
+
       UI.showLoader();
 
       try {
-        // 1. Ambil data JSON mentah dari Backend
         const res = await apiCall(`reports/monthly?month=${m}&year=${y}`, null, 'GET');
 
-        // 2. Siapkan Kerangka Tabel PDF
         const tableBody = [
           [
             { text: 'Tanggal', style: 'tableHeader' },
@@ -1092,7 +1099,6 @@ app.openDataModal = () => {
           ]
         ];
 
-        // 3. Masukkan data ke dalam tabel
         res.data.forEach(row => {
           tableBody.push([
             row.tanggal,
@@ -1103,7 +1109,6 @@ app.openDataModal = () => {
           ]);
         });
 
-        // 4. Desain Dokumen PDF
         const docDefinition = {
           content: [
             { text: 'LAPORAN REKAP PATROLI BULANAN', style: 'header' },
@@ -1123,183 +1128,171 @@ app.openDataModal = () => {
           }
         };
 
-        // 5. Render dan Download PDF langsung dari Browser!
-        // 5. Buka PDF di Tab Baru
-        // Memunculkan dialog print di halaman yang sama
-        // 5. Teknik Hidden Iframe agar tidak buka tab baru
+        // 2. Suntikkan file PDF ke Tab Baru yang sudah dibuka tadi
         pdfMake.createPdf(docDefinition).getBlob((blob) => {
           const url = URL.createObjectURL(blob);
-          const iframe = document.createElement('iframe');
-          iframe.style.display = 'none';
-          iframe.src = url;
-          document.body.appendChild(iframe);
-          iframe.onload = () => {
-            setTimeout(() => {
-              iframe.contentWindow.focus();
-              iframe.contentWindow.print();
-            }, 500); // Beri jeda 0.5 detik agar PDF selesai dimuat di latar belakang
-          };
+          if (previewWindow) {
+            previewWindow.location.href = url;
+            // Beri judul tab
+            setTimeout(() => { previewWindow.document.title = `Rekap_List_${m}_${y}`; }, 500);
+          }
+          UI.hideLoader();
         });
 
       } catch (err) {
+        if (previewWindow) previewWindow.close(); // Tutup tab jika error
         UI.alert('Gagal Mengambil Data', err.message);
+        UI.hideLoader();
       }
-
-      UI.hideLoader();
     };
 
     // Tambahkan ini di dalam bagian script Anda (bisa diletakkan setelah app.downloadPDF)
 
 app.downloadMatrixReport = async () => {
-  const month = document.getElementById('reportMonth').value;
-  const year = document.getElementById('reportYear').value;
-  UI.showLoader();
+      const month = document.getElementById('reportMonth').value;
+      const year = document.getElementById('reportYear').value;
 
-  try {
-    const res = await apiCall(`reports/matrix?month=${month}&year=${year}`, null, 'GET');
-    if (!res.ok) throw new Error("Gagal mengambil data matrix");
-
-    const groupedData = {};
-    const jamSlotsSequence = [];
-    res.data.forEach(row => {
-      if (!groupedData[row.lokasi]) groupedData[row.lokasi] = {};
-      if (!groupedData[row.lokasi][row.jam_slot]) groupedData[row.lokasi][row.jam_slot] = {};
-      
-      // Simpan objek lengkap: Inisial, dan Jumlah Scan per tipe
-      groupedData[row.lokasi][row.jam_slot][row.tgl] = {
-        inisial: row.inisial || "",
-        inhouse: parseInt(row.scan_inhouse) || 0,
-        outsource: parseInt(row.scan_outsource) || 0
-      };
-      
-      if (!jamSlotsSequence.includes(row.jam_slot)) {
-        jamSlotsSequence.push(row.jam_slot);
+      // 1. Buka tab baru SEBELUM proses API agar tidak diblokir Safari/Chrome
+      const previewWindow = window.open('', '_blank');
+      if (previewWindow) {
+        previewWindow.document.write('<h3 style="font-family:sans-serif; text-align:center; margin-top:20%; color:#198754;">Sedang melukis Matrix Checklist...</h3>');
+      } else {
+        return UI.alert('Pop-up Diblokir', 'Mohon izinkan pop-up (Pop-ups allowed) di browser Anda untuk melihat laporan.');
       }
-    });
 
-    const pageWidth = 841.89;
-    const pageMargins = [10, 18, 10, 18]; 
-    const printableWidth = pageWidth - pageMargins[0] - pageMargins[2];
+      UI.showLoader();
 
-    const jamWidth = 34; 
-    const dayCols = 31;
-    const dayWidth = Math.floor((printableWidth - jamWidth) / dayCols); 
-    const widths = [jamWidth, ...Array(dayCols).fill(dayWidth)];
+      try {
+        const res = await apiCall(`reports/matrix?month=${month}&year=${year}`, null, 'GET');
+        if (!res.ok) throw new Error("Gagal mengambil data matrix");
 
-    const content = [
-      { text: `LAPORAN MATRIX PATROLI (CHECKLIST)`, style: 'mainHeader' },
-      { text: `Periode: ${month}/${year} | Inisial Petugas`, style: 'subHeader' }
-    ];
-
-    const lokasiList = Object.keys(groupedData).sort();
-
-    lokasiList.forEach((lokasi) => {
-      content.push({ text: `LOKASI: ${lokasi.toUpperCase()}`, style: 'lokasiTitle' });
-
-      const tableBody = [];
-      const headerRow = [{ text: 'JAM', style: 'tableHeader' }];
-      for (let i = 1; i <= 31; i++) headerRow.push({ text: String(i), style: 'tableHeader' });
-      tableBody.push(headerRow);
-
-      const now = new Date();
-      const curYear = now.getFullYear();
-      const curMonth = now.getMonth() + 1;
-      const curDay = now.getDate();
-
-      const reqYear = parseInt(year);
-      const reqMonth = parseInt(month);
-
-      const jamSlots = jamSlotsSequence; 
-      jamSlots.forEach(jam => {
-        const row = [{ text: jam, style: 'jamCell' }];
-        for (let i = 1; i <= 31; i++) {
-          const cellObj = groupedData[lokasi][jam][i];
-          const inisial = cellObj ? cellObj.inisial : "";
-          const inCount = cellObj ? cellObj.inhouse : 0;
-          const outCount = cellObj ? cellObj.outsource : 0;
+        const groupedData = {};
+        const jamSlotsSequence = [];
+        res.data.forEach(row => {
+          if (!groupedData[row.lokasi]) groupedData[row.lokasi] = {};
+          if (!groupedData[row.lokasi][row.jam_slot]) groupedData[row.lokasi][row.jam_slot] = {};
           
-          let isPastOrToday = false;
-          if (reqYear < curYear) isPastOrToday = true;
-          else if (reqYear === curYear && reqMonth < curMonth) isPastOrToday = true;
-          else if (reqYear === curYear && reqMonth === curMonth && i <= curDay) isPastOrToday = true;
-
-          if (inisial === "") {
-            // KOSONG TOTAL
-            if (isPastOrToday) row.push({ text: "X", style: 'missedCell', fillColor: '#ffe6e6' }); 
-            else row.push({ text: "", style: 'dataCell' });
-          } else {
-            // LOGIKA WARNA CERDAS
-            let bg = '#ffffff';
-            let style = 'dataCell';
-            
-            if (inCount > 0 && outCount > 0) {
-              bg = '#28a745'; // Hijau Gelap (Keduanya hadir)
-              style = 'komplitCell';
-            } else if (inCount > 0 && outCount === 0) {
-              bg = '#fff3cd'; // Kuning (Hanya Inhouse)
-              style = 'partialInhouse';
-            } else if (outCount > 0 && inCount === 0) {
-              bg = '#d4edda'; // Hijau Lembut (Hanya Outsource)
-              style = 'partialOutsource';
-            }
-            
-            const formattedText = inisial.split(' / ').join('\n');
-            row.push({ text: formattedText, style: style, fillColor: bg });
+          groupedData[row.lokasi][row.jam_slot][row.tgl] = {
+            inisial: row.inisial || "",
+            inhouse: parseInt(row.scan_inhouse) || 0,
+            outsource: parseInt(row.scan_outsource) || 0
+          };
+          
+          if (!jamSlotsSequence.includes(row.jam_slot)) {
+            jamSlotsSequence.push(row.jam_slot);
           }
-        }
-        tableBody.push(row);
-      });
+        });
 
-      content.push({
-        table: { headerRows: 1, widths, body: tableBody },
-        layout: {
-          paddingLeft: () => 0, paddingRight: () => 0,
-          paddingTop: () => 1, paddingBottom: () => 1,
-          hLineWidth: () => 0.4, vLineWidth: () => 0.4,
-          hLineColor: () => '#444444', vLineColor: () => '#444444'
-        }
-      });
-      content.push({ text: '', margin: [0, 0, 0, 6] });
-    });
+        const pageWidth = 841.89;
+        const pageMargins = [10, 18, 10, 18]; 
+        const printableWidth = pageWidth - pageMargins[0] - pageMargins[2];
 
-    const docDefinition = {
-      pageOrientation: 'landscape',
-      pageSize: 'A4',
-      pageMargins,
-      defaultStyle: { fontSize: 6 },
-      content,
-      styles: {
-        mainHeader: { fontSize: 10, bold: true, alignment: 'center' },
-        subHeader: { fontSize: 7, alignment: 'center', margin: [0, 0, 0, 6] },
-        lokasiTitle: { fontSize: 8, bold: true, margin: [0, 3, 0, 1] },
-        tableHeader: { fontSize: 6, bold: true, fillColor: '#eeeeee', alignment: 'center' },
-        jamCell: { fontSize: 6, bold: true, alignment: 'center' },
-        dataCell: { fontSize: 5, alignment: 'center' },
-        missedCell: { fontSize: 6, bold: true, color: '#cc0000', alignment: 'center' },
-        // --- STYLE WARNA GUARD ---
-        komplitCell: { fontSize: 5, bold: true, color: '#ffffff', alignment: 'center' },
-        partialInhouse: { fontSize: 5, bold: true, color: '#856404', alignment: 'center' },
-        partialOutsource: { fontSize: 5, bold: true, color: '#155724', alignment: 'center' }
+        const jamWidth = 34; 
+        const dayCols = 31;
+        const dayWidth = Math.floor((printableWidth - jamWidth) / dayCols); 
+        const widths = [jamWidth, ...Array(dayCols).fill(dayWidth)];
+
+        const content = [
+          { text: `LAPORAN MATRIX PATROLI (CHECKLIST)`, style: 'mainHeader' },
+          { text: `Periode: ${month}/${year} | Inisial Petugas`, style: 'subHeader' }
+        ];
+
+        const lokasiList = Object.keys(groupedData).sort();
+
+        lokasiList.forEach((lokasi) => {
+          content.push({ text: `LOKASI: ${lokasi.toUpperCase()}`, style: 'lokasiTitle' });
+
+          const tableBody = [];
+          const headerRow = [{ text: 'JAM', style: 'tableHeader' }];
+          for (let i = 1; i <= 31; i++) headerRow.push({ text: String(i), style: 'tableHeader' });
+          tableBody.push(headerRow);
+
+          const now = new Date();
+          const curYear = now.getFullYear();
+          const curMonth = now.getMonth() + 1;
+          const curDay = now.getDate();
+          const reqYear = parseInt(year);
+          const reqMonth = parseInt(month);
+
+          const jamSlots = jamSlotsSequence; 
+          jamSlots.forEach(jam => {
+            const row = [{ text: jam, style: 'jamCell' }];
+            for (let i = 1; i <= 31; i++) {
+              const cellObj = groupedData[lokasi][jam][i];
+              const inisial = cellObj ? cellObj.inisial : "";
+              const inCount = cellObj ? cellObj.inhouse : 0;
+              const outCount = cellObj ? cellObj.outsource : 0;
+              
+              let isPastOrToday = false;
+              if (reqYear < curYear) isPastOrToday = true;
+              else if (reqYear === curYear && reqMonth < curMonth) isPastOrToday = true;
+              else if (reqYear === curYear && reqMonth === curMonth && i <= curDay) isPastOrToday = true;
+
+              if (inisial === "") {
+                if (isPastOrToday) row.push({ text: "X", style: 'missedCell', fillColor: '#ffe6e6' }); 
+                else row.push({ text: "", style: 'dataCell' });
+              } else {
+                let bg = '#ffffff';
+                let style = 'dataCell';
+                if (inCount > 0 && outCount > 0) { bg = '#145c29'; style = 'komplitCell'; } 
+                else if (inCount > 0 && outCount === 0) { bg = '#fff3cd'; style = 'partialInhouse'; } 
+                else if (outCount > 0 && inCount === 0) { bg = '#d4edda'; style = 'partialOutsource'; }
+                
+                const formattedText = inisial.split(' / ').join('\n');
+                row.push({ text: formattedText, style: style, fillColor: bg });
+              }
+            }
+            tableBody.push(row);
+          });
+
+          content.push({
+            table: { headerRows: 1, widths, body: tableBody },
+            layout: {
+              paddingLeft: () => 0, paddingRight: () => 0,
+              paddingTop: () => 1, paddingBottom: () => 1,
+              hLineWidth: () => 0.4, vLineWidth: () => 0.4,
+              hLineColor: () => '#444444', vLineColor: () => '#444444'
+            }
+          });
+          content.push({ text: '', margin: [0, 0, 0, 6] });
+        });
+
+        const docDefinition = {
+          pageOrientation: 'landscape',
+          pageSize: 'A4',
+          pageMargins,
+          defaultStyle: { fontSize: 6 },
+          content,
+          styles: {
+            mainHeader: { fontSize: 10, bold: true, alignment: 'center' },
+            subHeader: { fontSize: 7, alignment: 'center', margin: [0, 0, 0, 6] },
+            lokasiTitle: { fontSize: 8, bold: true, margin: [0, 3, 0, 1] },
+            tableHeader: { fontSize: 6, bold: true, fillColor: '#eeeeee', alignment: 'center' },
+            jamCell: { fontSize: 6, bold: true, alignment: 'center' },
+            dataCell: { fontSize: 5, alignment: 'center' },
+            missedCell: { fontSize: 6, bold: true, color: '#cc0000', alignment: 'center' },
+            komplitCell: { fontSize: 5, bold: true, color: '#ffffff', alignment: 'center' },
+            partialInhouse: { fontSize: 5, bold: true, color: '#856404', alignment: 'center' },
+            partialOutsource: { fontSize: 5, bold: true, color: '#155724', alignment: 'center' }
+          }
+        };
+
+        // 2. Suntikkan file PDF ke Tab Baru yang sudah dibuka tadi
+        pdfMake.createPdf(docDefinition).getBlob((blob) => {
+          const url = URL.createObjectURL(blob);
+          if (previewWindow) {
+            previewWindow.location.href = url;
+            setTimeout(() => { previewWindow.document.title = `Matrix_${month}_${year}`; }, 500);
+          }
+          UI.hideLoader();
+        });
+        
+      } catch (err) { 
+        if (previewWindow) previewWindow.close();
+        UI.alert('Error', err.message); 
+        UI.hideLoader();
       }
     };
-
-    pdfMake.createPdf(docDefinition).getBlob((blob) => {
-      const url = URL.createObjectURL(blob);
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = url;
-      document.body.appendChild(iframe);
-      iframe.onload = () => {
-        setTimeout(() => {
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();
-        }, 500); 
-      };
-    });
-    
-  } catch (err) { UI.alert('Error', err.message); }
-  UI.hideLoader();
-};
 
  
 
@@ -1686,6 +1679,7 @@ app.downloadMatrixReport = async () => {
 </body>
 
 </html>
+
 
 
 
